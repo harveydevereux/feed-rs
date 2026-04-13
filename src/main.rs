@@ -98,7 +98,7 @@ async fn update_subreddit(path: &Path, subreddit: String, webhook: Option<String
     for dentry in subreddit.new_entries() {
         new_posts.push(dentry.entry);
     }
-    
+
     match webhook {
         Some(s) => post_summary(&s, new_posts, &format!("## Top {} articles of the last 24 hours.", subreddit.name())).await,
         None => {}

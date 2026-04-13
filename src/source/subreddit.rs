@@ -1,7 +1,10 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, time::Duration};
 
 use chrono::{Datelike, Local, NaiveDate};
+use reqwest::{Client, StatusCode};
 use scraper::{Html, Selector};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::source::{Entry, Source, add_entry};
 
@@ -20,11 +23,35 @@ impl Subreddit {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct ChildData {
+    permalink: String,
+    thumbnail: String,
+    title: String,
+    created_utc: f64
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct Child {
+    data: ChildData
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct Listings {
+    children: Vec<Child>
+}
+
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct Response {
+    data: Listings
+}
+
 impl Source for Subreddit {
 
     fn name(&self) -> String { self.subreddit.clone() }
 
-    fn base_url(&self) -> String { format!("https://www.reddit.com/r/{}/top/?t=day&feedViewType=compactView", self.subreddit) }
+    fn base_url(&self) -> String { format!("https://www.reddit.com/r/{}/.json", self.subreddit) }
 
     fn get_remote(&self) -> HashMap<NaiveDate, Vec<Entry>> {
         self.remote_entries.clone()
@@ -34,69 +61,34 @@ impl Source for Subreddit {
         self.entries.clone()
     }
 
-    async fn update_remote(&mut self, document: Html) {
-        let article_selector = Selector::parse("article").unwrap();
-        let link_selector = Selector::parse("a").unwrap();
-        let img_selector = Selector::parse("img").unwrap();
-        let shreddit_selector = Selector::parse("shreddit-post").unwrap();
+    async fn get(&mut self) {
+        let client = Client::new();
+        let mut resp = client.get(self.base_url())
+            .header("Connection", "close")
+            .header("User-Agent", "feed")
+            .send().await.unwrap();
+        let mut tries = 0u8;
 
-        let now = Local::now();
-        let today = NaiveDate::from_ymd_opt(now.year(), now.month(), now.day()).unwrap();
-
-        for article in document.select(&article_selector) {
-
-            let title: String = match article.attr("aria-label") {
-                Some(s) => s.to_string(),
-                None => continue
-            };
-
-            let link: String = match article.select(&link_selector).into_iter().next() {
-                Some(a) => {
-                    match a.attr("href") {
-                        Some(href) => format!("https://www.reddit.com{}", href),
-                        None => continue
-                    }
-                },
-                None => continue
-            };
-
-            let picture_url: String = match article.select(&img_selector).into_iter().next() {
-                Some(pic) =>
-                {
-                    match pic.attr("alt") {
-                        Some(alt) => {
-                            if alt.to_lowercase().contains("avatar") {
-                                String::new()
-                            }
-                            else {
-                                match pic.attr("src") { Some(src) => src.to_string(), None => String::new()}
-                            }
-                        },
-                        None => match pic.attr("src") { Some(src) => src.to_string(), None => String::new()}
-                    }
-                }
-                None => String::new()
-            };
-
-            let date = match article.select(&shreddit_selector).into_iter().next() {
-                Some(post) => {
-                    match post.attr("created-timestamp") {
-                        Some(t) => {
-                            let ymd = t.split("T").collect::<Vec<_>>()[0];
-                            match NaiveDate::parse_from_str(ymd, "%Y-%m-%d") {
-                                Ok(date) => date,
-                                Err(_) => today
-                            }
-                        },
-                        None => today
-                    }
-                },
-                None => today
-            };
-
-            add_entry(&mut self.remote_entries, date, title.to_string(), link, Some(picture_url));
-
+        while resp.status() != StatusCode::OK {
+            resp = client.get(self.base_url())
+                .header("Connection", "close")
+                .header("User-Agent", "feed")
+                .send().await.unwrap();
+            tokio::time::sleep(Duration::from_millis(1000)).await;
+            tries += 1u8;
+            if tries == 3u8 { break }
         }
 
+        let response: Response = resp.json().await.unwrap();
+
+        for post in response.data.children {
+            let time = match chrono::DateTime::from_timestamp(post.data.created_utc as i64, 0) {
+                Some(t) => {NaiveDate::from_ymd_opt(t.year(), t.month(), t.day()).unwrap()},
+                None => continue
+            };
+            add_entry(&mut self.remote_entries, time, post.data.title, format!("https://reddit.com/{}", post.data.permalink), None);
+        }
     }
+
+    async fn update_remote(&mut self, _: Html) {}
 }
