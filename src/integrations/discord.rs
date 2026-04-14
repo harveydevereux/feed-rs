@@ -1,3 +1,4 @@
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::source::Entry;
@@ -36,9 +37,13 @@ pub async fn post_discord(webhook: &str, entry: &Entry, name: &str) {
     }
 }
 
-pub async fn post_summary(webhook: &str, entries: Vec<Entry>, header: &str) {
+pub async fn post_summary(webhook: &str, mut entries: Vec<Entry>, header: &str) {
 
     if entries.len() < 1 { return }
+
+    if entries.len() > 10 {
+        entries = entries[0..10].to_vec();
+    }
 
     let client = reqwest::Client::new();
 
@@ -46,14 +51,18 @@ pub async fn post_summary(webhook: &str, entries: Vec<Entry>, header: &str) {
     for entry in entries {
         embeds.push(entry.as_discord_post(None));
     }
-    let mut post = Post { embeds: embeds, content: Some(header.to_string()) };
+    let post = Post { embeds: embeds, content: Some(header.to_string()) };
 
     match client.post(webhook)
         .json(&post)
         .send()
         .await
     {
-        Ok(_) => {},
+        Ok(response) => {
+            if response.status() != StatusCode::OK {
+                println!("{:?}", response);
+            }
+        },
         Err(e) => {println!("{:?}", e)}
     }
 }
