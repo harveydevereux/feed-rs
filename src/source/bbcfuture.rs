@@ -1,19 +1,26 @@
-use std::{collections::{HashMap, HashSet}, path::Path, vec};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    vec,
+};
 
 use chrono::NaiveDate;
 use reqwest;
-use scraper::{Html, Selector, CaseSensitivity::AsciiCaseInsensitive};
+use scraper::{CaseSensitivity::AsciiCaseInsensitive, Html, Selector};
 
 use crate::source::{Entry, Source, add_entry};
 
-pub struct  BBCFuture {
+pub struct BBCFuture {
     remote_entries: HashMap<NaiveDate, Vec<Entry>>,
-    entries: HashMap<NaiveDate, Vec<Entry>>
+    entries: HashMap<NaiveDate, Vec<Entry>>,
 }
 
 impl BBCFuture {
     pub fn new(path: &Path) -> BBCFuture {
-        let mut source = BBCFuture { remote_entries: HashMap::new(), entries: HashMap::new() };
+        let mut source = BBCFuture {
+            remote_entries: HashMap::new(),
+            entries: HashMap::new(),
+        };
 
         source.entries = source.load(path);
         source
@@ -21,10 +28,13 @@ impl BBCFuture {
 }
 
 impl Source for BBCFuture {
+    fn name(&self) -> String {
+        String::from("BBCFuture")
+    }
 
-    fn name(&self) -> String { String::from("BBCFuture") }
-
-    fn base_url(&self) -> String { String::from("https://www.bbc.co.uk/future") }
+    fn base_url(&self) -> String {
+        String::from("https://www.bbc.co.uk/future")
+    }
 
     fn get_remote(&self) -> HashMap<NaiveDate, Vec<Entry>> {
         self.remote_entries.clone()
@@ -47,8 +57,10 @@ impl Source for BBCFuture {
                             urls.insert(format!("https://www.bbc.co.uk{}", url));
                             break;
                         }
-                    },
-                    None => {continue;}
+                    }
+                    None => {
+                        continue;
+                    }
                 }
             }
         }
@@ -57,36 +69,38 @@ impl Source for BBCFuture {
         let img_selector = Selector::parse("img").unwrap();
         let span_selector = Selector::parse("span").unwrap();
         for url in &urls {
-            let page = Html::parse_document(&reqwest::get(url)
-                    .await.unwrap()
-                    .text()
-                    .await.unwrap());
+            let page =
+                Html::parse_document(&reqwest::get(url).await.unwrap().text().await.unwrap());
             let titles: Vec<_> = page.select(&h1_selector).collect();
 
             let title = match titles.first() {
-                Some(t) => {
-                    match t.text().collect::<Vec<_>>().first() {
-                        Some(t) => t.to_string(),
-                        None => continue
-                    }
+                Some(t) => match t.text().collect::<Vec<_>>().first() {
+                    Some(t) => t.to_string(),
+                    None => continue,
                 },
-                None => { continue; }
+                None => {
+                    continue;
+                }
             };
 
             let mut picture_url = String::new();
             let mut date: Option<NaiveDate> = None;
 
             for div in page.select(&div_selector) {
-                if date.is_some() && picture_url != String::new() { break; }
+                if date.is_some() && picture_url != String::new() {
+                    break;
+                }
 
-                if picture_url == String::new() && div.value().has_class("hero-image", AsciiCaseInsensitive) {
+                if picture_url == String::new()
+                    && div.value().has_class("hero-image", AsciiCaseInsensitive)
+                {
                     let imgs: Vec<_> = div.select(&img_selector).collect();
                     match imgs.first() {
-                        Some(img) => {
-                            match img.attr("src") {
-                                Some(src) => { picture_url = src.to_string(); },
-                                None => {}
+                        Some(img) => match img.attr("src") {
+                            Some(src) => {
+                                picture_url = src.to_string();
                             }
+                            None => {}
                         },
                         None => {}
                     }
@@ -101,20 +115,25 @@ impl Source for BBCFuture {
                                 Some(t) => {
                                     let dmy: Vec<_> = t.split_whitespace().collect();
                                     if dmy.len() == 3 {
-                                        let d = dmy[0].replace("rd", "").replace("st", "").replace("nd", "").replace("th", "");
+                                        let d = dmy[0]
+                                            .replace("rd", "")
+                                            .replace("st", "")
+                                            .replace("nd", "")
+                                            .replace("th", "");
                                         let sdate = format!("{} {} {}", d, dmy[1], dmy[2]);
                                         date = match NaiveDate::parse_from_str(&sdate, "%d %B %Y") {
                                             Ok(d) => Some(d),
-                                            Err(_) => continue
+                                            Err(_) => continue,
                                         };
-                                    }
-                                    else {
+                                    } else {
                                         continue;
                                     }
-                                },
-                                None => { continue; }
+                                }
+                                None => {
+                                    continue;
+                                }
                             }
-                        },
+                        }
                         None => {}
                     }
                 }
@@ -122,9 +141,15 @@ impl Source for BBCFuture {
 
             if date.is_some() {
                 let d = date.unwrap();
-                add_entry(&mut self.remote_entries, d, title, url.to_string(), Some(picture_url));
+                add_entry(
+                    &mut self.remote_entries,
+                    d,
+                    title,
+                    url.to_string(),
+                    Some(picture_url),
+                    None,
+                );
             }
-
         }
     }
 }

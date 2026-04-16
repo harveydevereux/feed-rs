@@ -8,15 +8,19 @@ use serde_json::Value;
 
 use crate::source::{Entry, Source, add_entry};
 
-pub struct  Subreddit {
+pub struct Subreddit {
     remote_entries: HashMap<NaiveDate, Vec<Entry>>,
     entries: HashMap<NaiveDate, Vec<Entry>>,
-    subreddit: String
+    subreddit: String,
 }
 
 impl Subreddit {
     pub fn new(path: &Path, subreddit: String) -> Subreddit {
-        let mut source = Subreddit { remote_entries: HashMap::new(), entries: HashMap::new(), subreddit: subreddit };
+        let mut source = Subreddit {
+            remote_entries: HashMap::new(),
+            entries: HashMap::new(),
+            subreddit: subreddit,
+        };
 
         source.entries = source.load(path);
         source
@@ -28,30 +32,33 @@ struct ChildData {
     permalink: String,
     thumbnail: String,
     title: String,
-    created_utc: f64
+    created_utc: f64,
+    ups: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct Child {
-    data: ChildData
+    data: ChildData,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct Listings {
-    children: Vec<Child>
+    children: Vec<Child>,
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct Response {
-    data: Listings
+    data: Listings,
 }
 
 impl Source for Subreddit {
+    fn name(&self) -> String {
+        self.subreddit.clone()
+    }
 
-    fn name(&self) -> String { self.subreddit.clone() }
-
-    fn base_url(&self) -> String { format!("https://www.reddit.com/r/{}/.json", self.subreddit) }
+    fn base_url(&self) -> String {
+        format!("https://www.reddit.com/r/{}/.json", self.subreddit)
+    }
 
     fn get_remote(&self) -> HashMap<NaiveDate, Vec<Entry>> {
         self.remote_entries.clone()
@@ -63,30 +70,45 @@ impl Source for Subreddit {
 
     async fn get(&mut self) {
         let client = Client::new();
-        let mut resp = client.get(self.base_url())
+        let mut resp = client
+            .get(self.base_url())
             .header("Connection", "close")
             .header("User-Agent", "feed")
-            .send().await.unwrap();
+            .send()
+            .await
+            .unwrap();
         let mut tries = 0u8;
 
         while resp.status() != StatusCode::OK {
-            resp = client.get(self.base_url())
+            resp = client
+                .get(self.base_url())
                 .header("Connection", "close")
                 .header("User-Agent", "feed")
-                .send().await.unwrap();
+                .send()
+                .await
+                .unwrap();
             tokio::time::sleep(Duration::from_millis(1000)).await;
             tries += 1u8;
-            if tries == 3u8 { break }
+            if tries == 3u8 {
+                break;
+            }
         }
 
         let response: Response = resp.json().await.unwrap();
 
         for post in response.data.children {
             let time = match chrono::DateTime::from_timestamp(post.data.created_utc as i64, 0) {
-                Some(t) => {NaiveDate::from_ymd_opt(t.year(), t.month(), t.day()).unwrap()},
-                None => continue
+                Some(t) => NaiveDate::from_ymd_opt(t.year(), t.month(), t.day()).unwrap(),
+                None => continue,
             };
-            add_entry(&mut self.remote_entries, time, post.data.title, format!("https://reddit.com/{}", post.data.permalink), None);
+            add_entry(
+                &mut self.remote_entries,
+                time,
+                post.data.title,
+                format!("https://reddit.com/{}", post.data.permalink),
+                None,
+                Some(post.data.ups),
+            );
         }
     }
 

@@ -2,10 +2,11 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::source::Entry;
+use std::cmp::min;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Image {
-    pub url: String
+    pub url: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -13,57 +14,64 @@ pub struct Embed {
     pub url: String,
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub image: Option<Image>
+    pub image: Option<Image>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Post {
-    pub content: Option<String>,
-    pub embeds: Vec<Embed>
+    pub content: String,
+    pub embeds: Vec<Embed>,
 }
 
 pub async fn post_discord(webhook: &str, entry: &Entry, name: &str) {
-
     let client = reqwest::Client::new();
 
-    let post = Post { embeds: vec![entry.as_discord_post(Some(name))], content: None };
-    match client.post(webhook)
-        .json(&post)
-        .send()
-        .await
-    {
-        Ok(_) => {},
-        Err(e) => {println!("{:?}", e)}
+    let post = Post {
+        embeds: vec![entry.as_discord_post(Some(name))],
+        content: "".to_string(),
+    };
+    match client.post(webhook).json(&post).send().await {
+        Ok(_) => {}
+        Err(e) => {
+            println!("{:?}", e)
+        }
     }
 }
 
 pub async fn post_summary(webhook: &str, mut entries: Vec<Entry>, header: &str) {
-
-    if entries.len() < 1 { return }
-
-    if entries.len() > 5 {
-        entries = entries[0..5].to_vec();
+    if entries.len() < 1 {
+        return;
     }
 
-    let client = reqwest::Client::new();
+    entries.sort_by(|a, b| a.score.cmp(&b.score));
 
-    let mut embeds = Vec::new();
-    for entry in entries {
-        embeds.push(entry.as_discord_post(None));
-    }
-    let post = Post { embeds: embeds, content: Some(header.to_string()) };
+    for (i, batch) in entries.chunks(5).enumerate() {
+        let client = reqwest::Client::new();
 
-    match client.post(webhook)
-        .json(&post)
-        .send()
-        .await
-    {
-        Ok(response) => {
-            if response.status() != StatusCode::OK {
-                println!("{:?}", response);
-                println!("{}", serde_json::to_string_pretty(&post).unwrap());
+        let mut embeds = Vec::new();
+        for entry in batch {
+            embeds.push(entry.as_discord_post(None));
+        }
+
+        let post = Post {
+            embeds: embeds,
+            content: if i == 0 {
+                header.to_string()
+            } else {
+                "".to_string()
+            },
+        };
+
+        match client.post(webhook).json(&post).send().await {
+            Ok(response) => {
+                if response.status() != StatusCode::OK {
+                    println!("{:?}", response);
+                    println!("{}", serde_json::to_string_pretty(&post).unwrap());
+                }
             }
-        },
-        Err(e) => {println!("{:?}", e)}
+            Err(e) => {
+                println!("{:?}", e)
+            }
+        }
     }
 }
