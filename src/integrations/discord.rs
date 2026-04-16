@@ -41,8 +41,8 @@ pub async fn post_summary(webhook: &str, mut entries: Vec<Entry>, header: &str) 
 
     if entries.len() < 1 { return }
 
-    if entries.len() > 10 {
-        entries = entries[0..10].to_vec();
+    if entries.len() > 5 {
+        entries = entries[0..5].to_vec();
     }
 
     let client = reqwest::Client::new();
@@ -61,6 +61,7 @@ pub async fn post_summary(webhook: &str, mut entries: Vec<Entry>, header: &str) 
         Ok(response) => {
             if response.status() != StatusCode::OK {
                 println!("{:?}", response);
+                println!("{}", serde_json::to_string_pretty(&post).unwrap());
             }
         },
         Err(e) => {println!("{:?}", e)}
