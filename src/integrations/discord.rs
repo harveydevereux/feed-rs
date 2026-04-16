@@ -44,6 +44,7 @@ pub async fn post_summary(webhook: &str, mut entries: Vec<Entry>, header: &str) 
     }
 
     entries.sort_by(|a, b| a.score.cmp(&b.score));
+    entries.reverse();
 
     for (i, batch) in entries.chunks(5).enumerate() {
         let client = reqwest::Client::new();
