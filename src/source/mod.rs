@@ -4,6 +4,7 @@ pub mod naturenews;
 pub mod photosoftheday;
 pub mod subreddit;
 pub mod weekinwildlife;
+pub mod sciencenews;
 
 use std::{
     collections::{HashMap, HashSet},

@@ -1,12 +1,15 @@
 use std::{fs::create_dir, path::Path, process::exit};
 
-use feed_rs::{
-    integrations::discord::post_summary,
-    source::{
-        Source, bbcfuture::BBCFuture, bbcinpictures::BBCInPictures, naturenews::NatureNews,
-        photosoftheday::PhotosOfTheDay, subreddit::Subreddit, weekinwildlife::WeekInWildlife,
-    },
-};
+use feed_rs::{integrations::discord::post_summary, source::{
+    Source,
+    bbcfuture::BBCFuture,
+    bbcinpictures::BBCInPictures,
+    naturenews::NatureNews,
+    photosoftheday::PhotosOfTheDay,
+    subreddit::Subreddit,
+    weekinwildlife::WeekInWildlife,
+    sciencenews::ScienceNews
+}};
 
 #[tokio::main]
 async fn main() {
@@ -76,17 +79,23 @@ async fn update(path: &Path, webhook: Option<String>) {
     let mut nature_news = NatureNews::new(path);
     let f_nature_news = nature_news.get();
 
+    let mut science_news = ScienceNews::new(path);
+    let f_science_news = science_news.get();
+
     f_week_in_wild_life.await;
     f_photos_of_the_day.await;
     f_bbc_future.await;
     f_bbc_in_pictures.await;
     f_nature_news.await;
+    f_science_news.await;
 
     week_in_wild_life.commit(path, webhook.clone()).await;
     photos_of_the_day.commit(path, webhook.clone()).await;
     bbc_in_pictures.commit(path, webhook.clone()).await;
     bbc_future.commit(path, webhook.clone()).await;
     nature_news.commit(path, webhook.clone()).await;
+    science_news.commit(path, webhook.clone()).await;
+
 }
 
 async fn update_subreddit(path: &Path, subreddit: String, webhook: Option<String>) {
