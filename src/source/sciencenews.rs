@@ -71,7 +71,7 @@ impl Source for ScienceNews {
             match article.select(&img_selector).into_iter().next() {
                 Some(img) => {
                     match img.attr("src") {
-                        Some(src) => picture_url = src.to_string(),
+                        Some(src) => picture_url = format!("https://www.science.org{}", src),
                         None => continue
                     }
                 },
