@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::Path,
-    vec,
+    path::Path
 };
 
 use chrono::NaiveDate;

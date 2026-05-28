@@ -5,18 +5,20 @@ pub mod photosoftheday;
 pub mod subreddit;
 pub mod weekinwildlife;
 pub mod sciencenews;
+pub mod archaeologynews;
 
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
-    io::Write,
+    io::{Read, Write},
     path::Path,
     time::Duration,
 };
 
 use chrono::NaiveDate;
+use flate2::bufread::GzDecoder;
 use reqwest::{Client, StatusCode};
-use scraper::Html;
+use scraper::{Html, html};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -49,7 +51,7 @@ impl Entry {
 
         if title.len() > 128 {
             title = title[0..125].to_string();
-            for i in 0..2 {
+            for _ in 0..2 {
                 title.push_str(".");
             }
         }
@@ -133,6 +135,7 @@ pub trait Source {
         let mut resp = client
             .get(self.base_url())
             .header("Connection", "close")
+            .header("Accept", "text/html")
             .header("User-Agent", "feed")
             .send()
             .await
@@ -143,6 +146,7 @@ pub trait Source {
             resp = client
                 .get(self.base_url())
                 .header("Connection", "close")
+                .header("Accept", "text/html")
                 .header("User-Agent", "feed")
                 .send()
                 .await
@@ -153,8 +157,26 @@ pub trait Source {
                 break;
             }
         }
+        print!("{:?}", resp);
 
-        let html = resp.text().await.unwrap();
+        let headers = resp.headers().clone();
+
+        let html = if headers.contains_key("content-encoding") {
+            if headers.get("content-encoding").unwrap().to_str().unwrap().to_lowercase() == "gzip" {
+                let bytes = resp.bytes().await.unwrap().to_vec();
+                let mut decoder = GzDecoder::new(&*bytes);
+                let mut text = String::new();
+                decoder.read_to_string(&mut text).unwrap();
+                text
+            }
+            else {
+                resp.text().await.unwrap()
+            }
+        }
+        else {
+            resp.text().await.unwrap()
+        };
+
         let document = Html::parse_document(&html);
         self.update_remote(document).await;
     }

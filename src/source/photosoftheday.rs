@@ -41,7 +41,6 @@ impl Source for PhotosOfTheDay {
 
     async fn update_remote(&mut self, document: Html) {
         let section_selector = Selector::parse("section").unwrap();
-        let time_selector = Selector::parse("time").unwrap();
         let link_selector = Selector::parse("a").unwrap();
         let picture_selector = Selector::parse("picture").unwrap();
         let img_selector = Selector::parse("img").unwrap();

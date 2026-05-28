@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 aarch64 = "0.0.14"
 chrono = { version="0.4.44", features = ["serde"] }
+flate2 = "1.1.9"
 reqwest = { version="0.13.2", default-features = false, features=["default-tls", "json"] }
 scraper = "0.26.0"
 serde = {version="1.0.228", features=["derive"]}
